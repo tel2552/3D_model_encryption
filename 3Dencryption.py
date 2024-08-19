@@ -1,38 +1,23 @@
+import numpy as np
+import trimesh
+import random
 import tkinter as tk
 from tkinter import filedialog, messagebox
-import trimesh
-import numpy as np
 
-# ฟังก์ชันเข้ารหัสที่เปลี่ยนแปลงพิกัด (Vertices) ของ 3D Model
-def shift_vertices_encrypt(vertices, shift_x, shift_y, shift_z):
-    vertices[:, 0] += shift_x  # เลื่อนพิกัด X
-    vertices[:, 1] += shift_y  # เลื่อนพิกัด Y
-    vertices[:, 2] += shift_z  # เลื่อนพิกัด Z
-    return vertices
+def shift_triangles_encrypt(faces, shift_value=0):
+    # การเลื่อนพิกัด vertices ภายใน triangles
+    for i in range(len(faces)):
+        # สลับ vertices ภายใน triangle
+        random.shuffle(faces[i])
+        # เลื่อนพิกัด vertices
+        faces[i] = (faces[i] + shift_value) % len(faces) # ตัวอย่างการเลื่อนแบบ cyclic shift
 
-# สร้างหน้าต่างหลักของแอป
-root = tk.Tk()
-root.title("3D Model Shape Encryption")
+    return faces
 
-# ฟังก์ชันเปิดไฟล์
-def open_file():
-    file_path = filedialog.askopenfilename(filetypes=[("PLY files", "*.ply")])
-    if file_path:
-        file_path_var.set(file_path)
-
-# ฟังก์ชันบันทึกไฟล์
-def save_file():
-    file_path = filedialog.asksaveasfilename(defaultextension=".ply", filetypes=[("PLY files", "*.ply")])
-    if file_path:
-        save_path_var.set(file_path)
-
-# ฟังก์ชันเข้ารหัส
 def encrypt_file():
     file_path = file_path_var.get()
     save_path = save_path_var.get()
-    shift_x = float(x_shift_entry.get())
-    shift_y = float(y_shift_entry.get())
-    shift_z = float(z_shift_entry.get())
+    shift_value = int(shift_entry.get())
 
     if not file_path or not save_path:
         messagebox.showerror("Error", "Please select input and output files.")
@@ -40,39 +25,42 @@ def encrypt_file():
 
     try:
         mesh = trimesh.load(file_path)
-        vertices = mesh.vertices
-        encoded_vertices = shift_vertices_encrypt(vertices, shift_x, shift_y, shift_z)
-        mesh.vertices = encoded_vertices
+
+        # เข้ารหัส triangles (พื้นผิว)
+        faces = mesh.faces
+        encoded_faces = shift_triangles_encrypt(faces, shift_value)
+        mesh.faces = encoded_faces
+
+        if not save_path.endswith(('.ply', '.stl', '.obj')):
+            messagebox.showerror("Error", "Unsupported file format. Please use .ply, .stl, or .obj")
+            return
+
         mesh.export(save_path)
         messagebox.showinfo("Success", "File encrypted and saved successfully.")
     except Exception as e:
         messagebox.showerror("Error", str(e))
 
-# สร้าง UI ส่วนต่างๆ
+## สร้าง GUI ##
+root = tk.Tk()
+root.title("3D Model Encryptor")
+
 file_path_var = tk.StringVar()
 save_path_var = tk.StringVar()
 
-tk.Label(root, text="Input File:").grid(row=0, column=0, padx=10, pady=10)
-tk.Entry(root, textvariable=file_path_var, width=50).grid(row=0, column=1, padx=10, pady=10)
-tk.Button(root, text="Browse", command=open_file).grid(row=0, column=2, padx=10, pady=10)
+# จัดวาง Label, Entry และ Button ด้วยการเพิ่ม Padding
+tk.Label(root, text="Input File:").grid(row=0, column=0, padx=10, pady=5, sticky="e")
+tk.Entry(root, textvariable=file_path_var, width=40).grid(row=0, column=1, padx=10, pady=5)
+tk.Button(root, text="Browse", command=lambda: file_path_var.set(filedialog.askopenfilename())).grid(row=0, column=2, padx=10, pady=5)
 
-tk.Label(root, text="Output File:").grid(row=1, column=0, padx=10, pady=10)
-tk.Entry(root, textvariable=save_path_var, width=50).grid(row=1, column=1, padx=10, pady=10)
-tk.Button(root, text="Save As", command=save_file).grid(row=1, column=2, padx=10, pady=10)
+tk.Label(root, text="Output File:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+tk.Entry(root, textvariable=save_path_var, width=40).grid(row=1, column=1, padx=10, pady=5)
+tk.Button(root, text="Browse", command=lambda: save_path_var.set(filedialog.asksaveasfilename())).grid(row=1, column=2, padx=10, pady=5)
 
-tk.Label(root, text="X Shift Amount:").grid(row=2, column=0, padx=10, pady=10)
-x_shift_entry = tk.Entry(root)
-x_shift_entry.grid(row=2, column=1, padx=10, pady=10)
+tk.Label(root, text="Shift Value:").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+shift_entry = tk.Entry(root, width=10)
+shift_entry.grid(row=2, column=1, padx=10, pady=5, sticky="w")
 
-tk.Label(root, text="Y Shift Amount:").grid(row=3, column=0, padx=10, pady=10)
-y_shift_entry = tk.Entry(root)
-y_shift_entry.grid(row=3, column=1, padx=10, pady=10)
+tk.Button(root, text="Encrypt", command=encrypt_file).grid(row=3, column=1, padx=10, pady=10)
+root.grid_columnconfigure(1, weight=1)
 
-tk.Label(root, text="Z Shift Amount:").grid(row=4, column=0, padx=10, pady=10)
-z_shift_entry = tk.Entry(root)
-z_shift_entry.grid(row=4, column=1, padx=10, pady=10)
-
-tk.Button(root, text="Encrypt", command=encrypt_file).grid(row=5, column=0, columnspan=3, padx=10, pady=10)
-
-# เริ่ม loop ของ Tkinter
 root.mainloop()
